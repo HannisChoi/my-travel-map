@@ -3,72 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的世界足跡</title>
+    <title>我的奶油風旅遊足跡</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; background: #f4f4f9; }
-        h1 { margin: 20px 0; color: #333; }
-        #map { height: 600px; width: 90%; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .stats { margin: 20px; font-size: 1.2rem; background: white; padding: 10px 20px; border-radius: 50px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .info { color: #666; font-size: 0.9rem; margin-bottom: 10px; }
+        :root {
+            --cream-bg: #F9F7F2;
+            --cream-card: #FFFFFF;
+            --accent-color: #E6BAA3; /* 柔和粉橘 */
+            --text-color: #5D574F;
+            --border-radius: 20px;
+        }
+
+        body { 
+            font-family: 'PingFang HK', 'Microsoft JhengHei', sans-serif; 
+            margin: 0; 
+            background: var(--cream-bg); 
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px;
+            background: var(--cream-bg);
+        }
+
+        h1 { margin: 0; font-weight: 300; letter-spacing: 2px; }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            padding: 0 20px 20px 20px;
+            overflow: hidden;
+        }
+
+        /* 左側清單區 */
+        .sidebar {
+            width: 300px;
+            background: var(--cream-card);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .country-list {
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .country-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #F0EDE5;
+            cursor: pointer;
+        }
+
+        .country-item input {
+            margin-right: 12px;
+            accent-color: var(--accent-color);
+        }
+
+        /* 右側地圖區 */
+        #map {
+            flex: 1;
+            border-radius: var(--border-radius);
+            border: 8px solid white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+
+        /* 統計資訊 */
+        .stats {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* 捲軸美化 */
+        .country-list::-webkit-scrollbar { width: 5px; }
+        .country-list::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 10px; }
+
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; }
+            .sidebar { width: auto; height: 300px; }
+        }
     </style>
 </head>
 <body>
 
-    <h1>🌍 我的世界足跡</h1>
-    <div class="stats">已探索國家：<span id="country-count">0</span></div>
-    <div class="info">提示：點擊地圖上的國家來標記你的足跡</div>
-    <div id="map"></div>
+    <header>
+        <h1>Pastel Journey 🌍</h1>
+    </header>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="stats">已點亮：<span id="country-count">0</span> 個國家</div>
+            <div class="country-list" id="country-checkboxes">
+                <p style="font-size: 0.8rem; color: #999;">載入中...</p>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 初始化地圖，中心點設在座標 [20, 0]，縮放等級 2
-        const map = L.map('map').setView([20, 0], 2);
+        const map = L.map('map', {
+            center: [20, 0],
+            zoom: 2,
+            zoomControl: false // 隱藏縮放按鈕讓介面更乾淨
+        });
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+        // 使用淺色系的地圖底圖
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '©OpenStreetMap'
         }).addTo(map);
 
-        // 儲存已去過的國家
         let visitedCountries = JSON.parse(localStorage.getItem('visitedCountries')) || [];
+        let geoJsonLayer;
 
-        // 更新統計數字
         function updateStats() {
             document.getElementById('country-count').innerText = visitedCountries.length;
         }
 
-        // 載入世界地圖數據 (GeoJSON)
+        // 載入地圖數據
         fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson')
             .then(res => res.json())
             .then(data => {
-                L.geoJSON(data, {
-                    style: function(feature) {
-                        return {
-                            fillColor: visitedCountries.includes(feature.properties.name) ? '#ff6b6b' : '#abdbe3',
-                            weight: 1,
-                            opacity: 1,
-                            color: 'white',
-                            fillOpacity: 0.7
-                        };
-                    },
-                    onEachFeature: function(feature, layer) {
-                        layer.on('click', function() {
-                            const name = feature.properties.name;
-                            if (visitedCountries.includes(name)) {
-                                visitedCountries = visitedCountries.filter(c => c !== name);
-                                layer.setStyle({ fillColor: '#abdbe3' });
-                            } else {
-                                visitedCountries.push(name);
-                                layer.setStyle({ fillColor: '#ff6b6b' });
-                            }
-                            localStorage.setItem('visitedCountries', JSON.stringify(visitedCountries));
-                            updateStats();
-                        });
-                        layer.bindPopup(feature.properties.name);
-                    }
-                }).addTo(map);
-                updateStats();
+                // 排序國家名稱用於清單
+                const countryNames = data.features
+                    .map(f => f.properties.name)
+                    .sort((a, b) => a.localeCompare(b));
+
+                renderCheckboxes(countryNames);
+                renderMap(data);
             });
+
+        function renderCheckboxes(names) {
+            const container = document.getElementById('country-checkboxes');
+            container.innerHTML = '';
+            names.forEach(name => {
+                const div = document.createElement('div');
+                div.className = 'country-item';
+                const checked = visitedCountries.includes(name) ? 'checked' : '';
+                div.innerHTML = `
+                    <input type="checkbox" id="chk-${name}" ${checked} onchange="toggleCountry('${name}')">
+                    <label for="chk-${name}">${name}</label>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderMap(data) {
+            if (geoJsonLayer) map.removeLayer(geoJsonLayer);
+            
+            geoJsonLayer = L.geoJSON(data, {
+                style: function(feature) {
+                    return {
+                        fillColor: visitedCountries.includes(feature.properties.name) ? '#E6BAA3' : '#E8E4D9',
+                        weight: 1,
+                        opacity: 1,
+                        color: 'white',
+                        fillOpacity: 0.8
+                    };
+                },
+                onEachFeature: function(feature, layer) {
+                    layer.on('click', function() {
+                        toggleCountry(feature.properties.name);
+                    });
+                }
+            }).addTo(map);
+            updateStats();
+        }
+
+        function toggleCountry(name) {
+            if (visitedCountries.includes(name)) {
+                visitedCountries = visitedCountries.filter(c => c !== name);
+            } else {
+                visitedCountries.push(name);
+            }
+            localStorage.setItem('visitedCountries', JSON.stringify(visitedCountries));
+            
+            // 同步更新 Checkbox 狀態
+            const chk = document.getElementById(chk-${name});
+            if (chk) chk.checked = visitedCountries.includes(name);
+            
+            // 重新渲染地圖顏色
+            geoJsonLayer.eachLayer(layer => {
+                const countryName = layer.feature.properties.name;
+                layer.setStyle({
+                    fillColor: visitedCountries.includes(countryName) ? '#E6BAA3' : '#E8E4D9'
+                });
+            });
+            updateStats();
+        }
     </script>
 </body>
 </html>
