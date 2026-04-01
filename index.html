@@ -2,74 +2,73 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>My Creamy Travel Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的世界足跡</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; background: #F9F7F2; display: flex; height: 100vh; font-family: sans-serif; color: #5D574F; }
-        #sidebar { width: 280px; background: white; padding: 20px; border-right: 1px solid #EEE; overflow-y: auto; }
-        #map { flex: 1; }
-        details { margin-bottom: 10px; }
-        summary { cursor: pointer; font-weight: bold; color: #E6BAA3; padding: 8px; background: #FFF9F5; border-radius: 5px; list-style: none; }
-        .item { padding: 8px 10px; display: flex; align-items: center; font-size: 14px; }
-        input { margin-right: 10px; accent-color: #E6BAA3; cursor: pointer; }
-        .total { font-weight: bold; margin-bottom: 15px; color: #E6BAA3; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; background: #f4f4f9; }
+        h1 { margin: 20px 0; color: #333; }
+        #map { height: 600px; width: 90%; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .stats { margin: 20px; font-size: 1.2rem; background: white; padding: 10px 20px; border-radius: 50px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .info { color: #666; font-size: 0.9rem; margin-bottom: 10px; }
     </style>
 </head>
 <body>
-    <div id="sidebar">
-        <div class="total">已探索：<span id="cnt">0</span> 個地方</div>
-        <div id="menu"></div>
-    </div>
+
+    <h1>🌍 我的世界足跡</h1>
+    <div class="stats">已探索國家：<span id="country-count">0</span></div>
+    <div class="info">提示：點擊地圖上的國家來標記你的足跡</div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const data = {
-            "🇨🇳 中國城市": { "北京": [39.9, 116.4], "上海": [31.2, 121.4], "廣州": [23.1, 113.2], "深圳": [22.5, 114.0], "西安": [34.3, 108.9], "成都": [30.6, 104.0] },
-            "🌏 亞洲": { "日本": [36.2, 138.2], "韓國": [35.9, 127.7], "泰國": [15.8, 100.9], "新加坡": [1.35, 103.8] },
-            "🇪🇺 歐洲": { "英國": [55.3, -3.4], "法國": [46.2, 2.2], "德國": [51.1, 10.4], "意大利": [41.8, 12.5] },
-            "🇳🇿 大洋洲": { "澳洲": [-25.2, 133.7], "新西蘭": [-40.9, 174.8] }
-        };
+        // 初始化地圖，中心點設在座標 [20, 0]，縮放等級 2
+        const map = L.map('map').setView([20, 0], 2);
 
-        const map = L.map('map', { zoomControl: false }).setView([20, 110], 3);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-        let visited = JSON.parse(localStorage.getItem('travel_data')) || [];
-        const markers = {};
+        // 儲存已去過的國家
+        let visitedCountries = JSON.parse(localStorage.getItem('visitedCountries')) || [];
 
-        const menu = document.getElementById('menu');
-        for (let zone in data) {
-            const det = document.createElement('details');
-            det.innerHTML = <summary>${zone}</summary>;
-            for (let name in data[zone]) {
-                const div = document.createElement('div');
-                div.className = 'item';
-                const chk = visited.includes(name) ? 'checked' : '';
-                div.innerHTML = <input type="checkbox" id="${name}" ${chk} onchange="toggle('${name}')"><label for="${name}">${name}</label>;
-                det.appendChild(div);
-                if(visited.includes(name)) addMarker(name, data[zone][name]);
-            }
-            menu.appendChild(det);
+        // 更新統計數字
+        function updateStats() {
+            document.getElementById('country-count').innerText = visitedCountries.length;
         }
 
-        function toggle(name) {
-            if(visited.includes(name)) {
-                visited = visited.filter(n => n !== name);
-                map.removeLayer(markers[name]);
-            } else {
-                visited.push(name);
-                let coords;
-                for(let z in data) if(data[z][name]) coords = data[z][name];
-                addMarker(name, coords);
-            }
-            localStorage.setItem('travel_data', JSON.stringify(visited));
-            document.getElementById('cnt').innerText = visited.length;
-        }
-
-        function addMarker(name, coords) {
-            markers[name] = L.circleMarker(coords, {radius:8, fillColor:"#E6BAA3", color:"#FFF", weight:2, fillOpacity:0.9}).addTo(map);
-        }
-        document.getElementById('cnt').innerText = visited.length;
+        // 載入世界地圖數據 (GeoJSON)
+        fetch('https://raw.githubusercontent.com/datasets/geo-boundaries-world-110m/master/countries.geojson')
+            .then(res => res.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function(feature) {
+                        return {
+                            fillColor: visitedCountries.includes(feature.properties.name) ? '#ff6b6b' : '#abdbe3',
+                            weight: 1,
+                            opacity: 1,
+                            color: 'white',
+                            fillOpacity: 0.7
+                        };
+                    },
+                    onEachFeature: function(feature, layer) {
+                        layer.on('click', function() {
+                            const name = feature.properties.name;
+                            if (visitedCountries.includes(name)) {
+                                visitedCountries = visitedCountries.filter(c => c !== name);
+                                layer.setStyle({ fillColor: '#abdbe3' });
+                            } else {
+                                visitedCountries.push(name);
+                                layer.setStyle({ fillColor: '#ff6b6b' });
+                            }
+                            localStorage.setItem('visitedCountries', JSON.stringify(visitedCountries));
+                            updateStats();
+                        });
+                        layer.bindPopup(feature.properties.name);
+                    }
+                }).addTo(map);
+                updateStats();
+            });
     </script>
 </body>
 </html>
